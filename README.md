@@ -34,7 +34,11 @@
 cp .env.example .env
 # Отредактируйте .env и укажите API-ключи
 
-# 2. Запуск всех сервисов
+# 2. Запуск всех сервисов:
+#    ./build.sh              — сборка и up -d
+#    ./build.sh --rebuild    — без кэша
+#    ./build.sh --stop       — остановить стек | --clean — + снять собранные образы | --purge — + тома (БД)
+#    ./build.sh --status     — статус контейнеров (ps -a)
 docker compose up -d
 
 # 3. Откройте веб-интерфейс (порт задаётся в .env: APP_PORT, по умолчанию 8000)
@@ -105,18 +109,20 @@ curl -O http://localhost:8000/api/tasks/{task_id}/download
 
 ### WebSocket
 
-Подключение к `ws://localhost:8000/ws/{task_id}` для интерактива в реальном времени с поддержкой interrupt/resume.
+Подключение к `ws://localhost:<APP_PORT>/ws/{task_id}` (порт приложения — `APP_PORT` в `.env`).
 
 ## Сервисы
 
-| Сервис | Порт | Описание |
-|--------|------|----------|
-| App | 8000 | FastAPI + агенты LangGraph |
-| PostgreSQL | 5432 | Checkpointing состояния и история |
-| Redis | 6379 | Очередь задач |
-| ChromaDB | 8100 | Векторное хранилище RAG |
-| Langfuse | 3001 | Дашборд наблюдаемости LLM |
-| Docker DinD | — | Изолированная песочница для выполнения кода |
+Порты на хосте задаются в `.env` (см. `.env.example`): `APP_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `CHROMADB_HOST_PORT`, `LANGFUSE_PORT`. Ниже значения по умолчанию.
+
+| Сервис | Порт (по умолчанию) | Переменная | Описание |
+|--------|---------------------|------------|----------|
+| App | 8000 | `APP_PORT` | FastAPI + агенты LangGraph |
+| PostgreSQL | 5432 | `POSTGRES_PORT` | Checkpointing состояния и история |
+| Redis | 6379 | `REDIS_PORT` | Очередь задач |
+| ChromaDB | 8100→8000 | `CHROMADB_HOST_PORT` | Векторное хранилище RAG (на хосте; внутри сети Chroma — `CHROMADB_INTERNAL_PORT`, обычно 8000) |
+| Langfuse | 3001 | `LANGFUSE_PORT` | Дашборд наблюдаемости LLM |
+| Docker DinD | — | — | Изолированная песочница для выполнения кода |
 
 ## Структура проекта
 

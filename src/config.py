@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://agents:agents@postgres:5432/agents"
     redis_url: str = "redis://redis:6379/0"
     chromadb_host: str = "chromadb"
-    chromadb_port: int = 8100
+    chromadb_port: int = 8000  # порт HTTP внутри контейнера Chroma (см. CHROMADB_INTERNAL_PORT)
     langfuse_host: str = "http://langfuse:3000"
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
