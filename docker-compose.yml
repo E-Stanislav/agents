@@ -1,0 +1,147 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_PORT:-8000}:${APP_PORT:-8000}"
+    env_file:
+      - .env
+    volumes:
+      - ./llm_config.yaml:/app/llm_config.yaml:ro
+      - ./tasks:/app/tasks
+      - ./output:/app/output
+      - ./templates:/app/templates:ro
+      - ./src/prompts:/app/src/prompts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+      docker-dind:
+        condition: service_started
+    environment:
+      - APP_PORT=${APP_PORT:-8000}
+      - DATABASE_URL=postgresql+asyncpg://agents:agents@postgres:5432/agents
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8100
+      - DOCKER_HOST=tcp://docker-dind:2376
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
+      - LANGFUSE_HOST=http://langfuse:3000
+      - LLM_CONFIG_PATH=/app/llm_config.yaml
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agents
+      POSTGRES_PASSWORD: agents
+      POSTGRES_DB: agents
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agents"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  docker-dind:
+    image: docker:27-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      - dind_certs:/certs
+      - dind_data:/var/lib/docker
+    networks:
+      agent-net:
+        aliases:
+          - docker-dind
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    ports:
+      - "8100:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  langfuse:
+    image: langfuse/langfuse:2
+    ports:
+      - "3001:3000"
+    environment:
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      - NEXTAUTH_SECRET=mysecret-change-in-production
+      - NEXTAUTH_URL=http://localhost:3001
+      - SALT=mysalt-change-in-production
+      - TELEMETRY_ENABLED=false
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  langfuse-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  dind_certs:
+  dind_data:
+  chroma_data:
+  langfuse_db_data:
+
+networks:
+  agent-net:
+    driver: bridge

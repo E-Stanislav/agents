@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>Project Generator</h1>
+            <p class="subtitle">AI-powered multi-agent project scaffolding</p>
+        </header>
+
+        <main class="main">
+            <!-- Upload Section -->
+            <section id="upload-section" class="section">
+                <div class="upload-area" id="drop-zone">
+                    <div class="upload-icon">&#128196;</div>
+                    <p>Drop your <strong>.md</strong> requirements file here</p>
+                    <p class="upload-hint">or</p>
+                    <label class="btn btn-primary" for="file-input">Choose File</label>
+                    <input type="file" id="file-input" accept=".md" hidden>
+                    <div class="divider">
+                        <span>or paste requirements below</span>
+                    </div>
+                    <textarea id="md-input" placeholder="# My Project&#10;&#10;Describe your project requirements here..."></textarea>
+                    <button class="btn btn-primary btn-start" id="start-btn" disabled>Generate Project</button>
+                </div>
+            </section>
+
+            <!-- Progress Section -->
+            <section id="progress-section" class="section hidden">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-phases" id="progress-phases"></div>
+                </div>
+
+                <div class="chat-container" id="chat-container">
+                    <div class="chat-messages" id="chat-messages"></div>
+                    <div class="chat-input-area hidden" id="chat-input-area">
+                        <textarea id="chat-input" placeholder="Type your answer..." rows="2"></textarea>
+                        <button class="btn btn-primary" id="chat-send">Send</button>
+                    </div>
+                </div>
+
+                <!-- Architecture Approval -->
+                <div class="arch-approval hidden" id="arch-approval">
+                    <h3>Architecture Plan</h3>
+                    <pre id="arch-plan-content"></pre>
+                    <div class="arch-actions">
+                        <button class="btn btn-success" id="arch-approve">Approve</button>
+                        <button class="btn btn-secondary" id="arch-reject">Request Changes</button>
+                    </div>
+                    <textarea id="arch-feedback" class="hidden" placeholder="Describe what to change..."></textarea>
+                    <button class="btn btn-primary hidden" id="arch-submit-feedback">Submit Feedback</button>
+                </div>
+            </section>
+
+            <!-- Result Section -->
+            <section id="result-section" class="section hidden">
+                <div class="result-card">
+                    <div class="result-icon">&#9989;</div>
+                    <h2>Project Generated!</h2>
+                    <p id="result-message"></p>
+                    <a class="btn btn-primary" id="download-btn" href="#">Download Project</a>
+                </div>
+            </section>
+        </main>
+
+        <!-- Task History -->
+        <aside class="sidebar">
+            <h3>History</h3>
+            <ul id="history-list"></ul>
+        </aside>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
