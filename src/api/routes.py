@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from pathlib import Path
@@ -16,6 +17,12 @@ router = APIRouter(prefix="/api", tags=["projects"])
 # In-memory task store (in production, use PostgreSQL)
 _tasks: dict[str, dict] = {}
 
+# Per-task cancellation events: set() means "please cancel"
+_cancel_events: dict[str, asyncio.Event] = {}
+
+# Tracks whether a WebSocket handler is actively processing each task
+_active_ws: dict[str, bool] = {}
+
 
 class TaskCreate(BaseModel):
     md_content: str
@@ -29,6 +36,7 @@ class TaskResponse(BaseModel):
 
 class TaskStatus(BaseModel):
     task_id: str
+    status: str = "unknown"
     phase: str
     progress: float = 0.0
     output_path: str = ""
@@ -104,6 +112,7 @@ async def get_task_status(task_id: str):
     task = _tasks[task_id]
     return TaskStatus(
         task_id=task_id,
+        status=task.get("status", "unknown"),
         phase=task.get("phase", "unknown"),
         output_path=task.get("output_path", ""),
         archive_path=task.get("archive_path", ""),
@@ -146,6 +155,45 @@ async def list_tasks():
         }
         for t in _tasks.values()
     ]
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """Request cancellation of a running task."""
+    if task_id not in _tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task = _tasks[task_id]
+    if task.get("status") in ("done", "error", "cancelled"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task already finished with status: {task.get('status')}",
+        )
+
+    if task_id not in _cancel_events:
+        _cancel_events[task_id] = asyncio.Event()
+
+    _cancel_events[task_id].set()
+    logger.info("Cancel requested for task %s", task_id)
+
+    if not _active_ws.get(task_id):
+        _tasks[task_id].update(
+            status="cancelled",
+            phase="cancelled",
+            interrupt_type="",
+            interrupt_data={},
+        )
+        logger.info("Task %s cancelled directly (no active WS handler)", task_id)
+        return {"task_id": task_id, "status": "cancelled"}
+
+    return {"task_id": task_id, "status": "cancel_requested"}
+
+
+def get_cancel_event(task_id: str) -> asyncio.Event:
+    """Get or create the cancellation event for a task."""
+    if task_id not in _cancel_events:
+        _cancel_events[task_id] = asyncio.Event()
+    return _cancel_events[task_id]
 
 
 def update_task(task_id: str, **kwargs) -> None:

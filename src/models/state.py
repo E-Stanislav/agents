@@ -22,6 +22,7 @@ class Phase(str, Enum):
     DELIVERING = "delivering"
     DONE = "done"
     ERROR = "error"
+    CANCELLED = "cancelled"
 
 
 class ProjectState(BaseModel):

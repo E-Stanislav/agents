@@ -148,6 +148,11 @@ body {
     color: var(--primary);
 }
 
+.history-item.status-cancelled .history-status {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--text-muted);
+}
+
 .history-item.status-idle .history-status {
     background: var(--surface-2);
     color: var(--text-muted);
@@ -253,7 +258,43 @@ textarea:focus { border-color: var(--primary); }
 }
 
 /* Progress */
-.progress-container { margin-bottom: 24px; }
+.progress-header {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+
+.progress-container {
+    flex: 1;
+}
+
+.btn-cancel {
+    background: transparent;
+    color: var(--error);
+    border: 1px solid var(--error);
+    padding: 8px 20px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+    margin-top: 0;
+}
+
+.btn-cancel:hover {
+    background: var(--error);
+    color: white;
+}
+
+.btn-cancel:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: var(--text-muted);
+    color: var(--text-muted);
+}
+
+.btn-cancel:disabled:hover {
+    background: transparent;
+    color: var(--text-muted);
+}
 
 .progress-bar {
     height: 6px;

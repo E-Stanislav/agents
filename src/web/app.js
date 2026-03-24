@@ -34,6 +34,7 @@ const archFeedback = document.getElementById("arch-feedback");
 const archSubmitFeedback = document.getElementById("arch-submit-feedback");
 const downloadBtn = document.getElementById("download-btn");
 const resultMessage = document.getElementById("result-message");
+const cancelBtn = document.getElementById("cancel-btn");
 const historyList = document.getElementById("history-list");
 
 // ── Session persistence ──
@@ -152,9 +153,41 @@ startBtn.addEventListener("click", async () => {
         addToHistory({ task_id: currentTaskId, status: "created", phase: "init" });
         showSection(progressSection);
         initPhases();
+        cancelBtn.disabled = false;
+        cancelBtn.textContent = "Cancel";
         connectWebSocket(currentTaskId);
     } catch (err) {
         alert("Failed to create task: " + err.message);
+    }
+});
+
+// ── Cancel task ──
+
+cancelBtn.addEventListener("click", async () => {
+    if (!currentTaskId) return;
+
+    cancelBtn.disabled = true;
+    cancelBtn.textContent = "Cancelling...";
+
+    try {
+        const res = await fetch(`/api/tasks/${currentTaskId}/cancel`, {
+            method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            addChatMessage(`Cancel failed: ${data.detail || "Unknown error"}`, "error");
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = "Cancel";
+            return;
+        }
+
+        if (data.status === "cancelled") {
+            handleCancelled({ message: "Task cancelled." });
+        }
+    } catch (err) {
+        addChatMessage("Failed to cancel: " + err.message, "error");
+        cancelBtn.disabled = false;
+        cancelBtn.textContent = "Cancel";
     }
 });
 
@@ -199,6 +232,10 @@ function handleMessage(msg) {
 
         case "done":
             handleDone(msg);
+            break;
+
+        case "cancelled":
+            handleCancelled(msg);
             break;
 
         case "error":
@@ -290,6 +327,16 @@ function handleDone(msg) {
     refreshHistory();
 }
 
+// ── Cancelled ──
+
+function handleCancelled(msg) {
+    clearSession();
+    addChatMessage(msg.message || "Task cancelled.", "system");
+    cancelBtn.disabled = true;
+    cancelBtn.textContent = "Cancelled";
+    refreshHistory();
+}
+
 // ── Resume task (reconnect after page refresh) ──
 
 async function resumeTask(taskId) {
@@ -316,12 +363,19 @@ async function resumeTask(taskId) {
             return;
         }
 
+        if (task.status === "cancelled" || task.phase === "cancelled") {
+            clearSession();
+            return;
+        }
+
         // Task is in progress or waiting for input — reconnect
         currentTaskId = taskId;
         saveSession(taskId);
         showSection(progressSection);
         initPhases();
         updatePhase(task.phase);
+        cancelBtn.disabled = false;
+        cancelBtn.textContent = "Cancel";
 
         if (task.interrupt_type) {
             addChatMessage(
@@ -379,6 +433,7 @@ function isWaitingForInput(task) {
 function getStatusClass(task) {
     if (task.status === "done" || task.phase === "done") return "status-done";
     if (task.status === "error" || task.phase === "error") return "status-error";
+    if (task.status === "cancelled" || task.phase === "cancelled") return "status-cancelled";
     if (isWaitingForInput(task)) return "status-waiting";
     if (task.status === "running") return "status-running";
     return "status-idle";
@@ -387,6 +442,7 @@ function getStatusClass(task) {
 function getStatusIcon(task) {
     if (task.status === "done" || task.phase === "done") return "\u2705";
     if (task.status === "error" || task.phase === "error") return "\u274C";
+    if (task.status === "cancelled" || task.phase === "cancelled") return "\u{1F6D1}";
     if (isWaitingForInput(task)) return "\u{1F7E1}";
     if (task.status === "running") return "\u23F3";
     return "\u26AA";

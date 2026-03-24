@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -9,7 +10,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
 from src.agents.orchestrator import build_graph
-from src.api.routes import _tasks, update_task
+from src.api.routes import _tasks, _active_ws, update_task, get_cancel_event
 from src.models.state import Phase, ProjectState
 from src.security.validators import validate_md_input, ValidationError
 
@@ -123,6 +124,7 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
     """
     await websocket.accept()
     logger.info("WebSocket connected for task %s", task_id)
+    _active_ws[task_id] = True
 
     try:
         task = _tasks.get(task_id)
@@ -170,7 +172,7 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
             current_input = Command(resume=resume_data)
             is_resume = True
         else:
-            if task.get("status") in ("done", "error"):
+            if task.get("status") in ("done", "error", "cancelled"):
                 await websocket.send_json({
                     "type": "error",
                     "message": f"Task already finished with status: {task.get('status')}",
@@ -191,13 +193,39 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
             current_input = initial_state
             is_resume = False
 
+        cancel_event = get_cancel_event(task_id)
+
+        async def _finish_cancelled():
+            update_task(
+                task_id,
+                status="cancelled",
+                phase="cancelled",
+                interrupt_type="",
+                interrupt_data={},
+            )
+            try:
+                await websocket.send_json({
+                    "type": "cancelled",
+                    "message": "Task was cancelled by user.",
+                })
+            except Exception:
+                pass
+
         # ── Main graph execution loop ──
         while True:
+            if cancel_event.is_set():
+                await _finish_cancelled()
+                return
+
             try:
                 stream = app.astream(current_input, config=config)
                 is_resume = True
 
                 async for event in stream:
+                    if cancel_event.is_set():
+                        await _finish_cancelled()
+                        return
+
                     for node_name, node_output in event.items():
                         if node_name == "__interrupt__":
                             interrupt_payload = _extract_interrupt_value(node_output)
@@ -217,7 +245,23 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
                                 "data": interrupt_payload,
                             })
 
-                            response_raw = await websocket.receive_text()
+                            # Wait for either user response or cancellation
+                            receive_task = asyncio.ensure_future(websocket.receive_text())
+                            cancel_wait = asyncio.ensure_future(cancel_event.wait())
+
+                            done, pending = await asyncio.wait(
+                                [receive_task, cancel_wait],
+                                return_when=asyncio.FIRST_COMPLETED,
+                            )
+
+                            for p in pending:
+                                p.cancel()
+
+                            if cancel_wait in done:
+                                await _finish_cancelled()
+                                return
+
+                            response_raw = receive_task.result()
                             response = json.loads(response_raw)
                             resume_data = response.get("data", response)
 
@@ -295,3 +339,5 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception:
             pass
+    finally:
+        _active_ws.pop(task_id, None)
