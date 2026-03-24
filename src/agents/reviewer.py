@@ -49,20 +49,20 @@ async def review_code(state: ProjectState) -> dict:
         if handler:
             callbacks.append(handler)
 
-        user_msg = f"""## Project Plan
+        user_msg = f"""## План проекта
 {plan_json}
 
-## File to Review
-- **Path**: {file_spec.path}
-- **Description**: {file_spec.description}
-- **Iteration**: {iteration} of {settings.max_review_iterations}
+## Файл для ревью
+- **Путь**: {file_spec.path}
+- **Описание**: {file_spec.description}
+- **Итерация**: {iteration} из {settings.max_review_iterations}
 
-## File Content
+## Содержимое файла
 ```{file_spec.language}
 {file_spec.content}
 ```
 
-Review this file now."""
+Проведи ревью этого файла сейчас."""
 
         response = await llm.ainvoke(
             [

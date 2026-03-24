@@ -36,7 +36,22 @@ const downloadBtn = document.getElementById("download-btn");
 const resultMessage = document.getElementById("result-message");
 const historyList = document.getElementById("history-list");
 
-// Initialize phase badges
+// ── Session persistence ──
+
+function saveSession(taskId) {
+    sessionStorage.setItem("currentTaskId", taskId);
+}
+
+function clearSession() {
+    sessionStorage.removeItem("currentTaskId");
+}
+
+function getSavedTaskId() {
+    return sessionStorage.getItem("currentTaskId");
+}
+
+// ── Phase rendering ──
+
 function initPhases() {
     progressPhases.innerHTML = PHASES.map(
         (p) => `<span class="phase-badge" data-phase="${p.id}">${p.label}</span>`
@@ -72,14 +87,14 @@ function showSection(section) {
     section.classList.remove("hidden");
 }
 
-// Enable start button when there's content
 function checkInput() {
     startBtn.disabled = !mdInput.value.trim();
 }
 
 mdInput.addEventListener("input", checkInput);
 
-// File upload
+// ── File upload ──
+
 fileInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -91,7 +106,6 @@ fileInput.addEventListener("change", (e) => {
     reader.readAsText(file);
 });
 
-// Drag and drop
 dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropZone.classList.add("dragover");
@@ -115,7 +129,8 @@ dropZone.addEventListener("drop", (e) => {
     }
 });
 
-// Start generation
+// ── Start generation ──
+
 startBtn.addEventListener("click", async () => {
     const content = mdInput.value.trim();
     if (!content) return;
@@ -133,7 +148,8 @@ startBtn.addEventListener("click", async () => {
         }
 
         currentTaskId = data.task_id;
-        addToHistory(currentTaskId);
+        saveSession(currentTaskId);
+        addToHistory({ task_id: currentTaskId, status: "created", phase: "init" });
         showSection(progressSection);
         initPhases();
         connectWebSocket(currentTaskId);
@@ -142,13 +158,18 @@ startBtn.addEventListener("click", async () => {
     }
 });
 
-// WebSocket connection
+// ── WebSocket connection ──
+
 function connectWebSocket(taskId) {
+    if (ws) {
+        try { ws.close(); } catch (_) {}
+    }
+
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     ws = new WebSocket(`${protocol}//${location.host}/ws/${taskId}`);
 
     ws.onopen = () => {
-        addChatMessage("Connected. Starting project generation...", "system");
+        addChatMessage("Connected.", "system");
     };
 
     ws.onmessage = (event) => {
@@ -231,7 +252,8 @@ function handleInterrupt(msg) {
     }
 }
 
-// Architecture approval
+// ── Architecture approval ──
+
 archApprove.addEventListener("click", () => {
     ws.send(JSON.stringify({ type: "resume", data: { approved: true } }));
     archApproval.classList.add("hidden");
@@ -257,32 +279,150 @@ archSubmitFeedback.addEventListener("click", () => {
     addChatMessage(`Requested changes: ${feedback}`, "user");
 });
 
+// ── Done ──
+
 function handleDone(msg) {
+    clearSession();
     showSection(resultSection);
     resultMessage.textContent = "Your project has been generated successfully.";
     downloadBtn.href = `/api/tasks/${currentTaskId}/download`;
     downloadBtn.download = true;
+    refreshHistory();
 }
 
-// History
-function addToHistory(taskId) {
+// ── Resume task (reconnect after page refresh) ──
+
+async function resumeTask(taskId) {
+    try {
+        const res = await fetch(`/api/tasks/${taskId}`);
+        if (!res.ok) {
+            clearSession();
+            return;
+        }
+        const task = await res.json();
+
+        if (task.phase === "done" || task.status === "done") {
+            currentTaskId = taskId;
+            showSection(resultSection);
+            resultMessage.textContent = "Your project has been generated successfully.";
+            downloadBtn.href = `/api/tasks/${currentTaskId}/download`;
+            downloadBtn.download = true;
+            clearSession();
+            return;
+        }
+
+        if (task.phase === "error" || task.status === "error") {
+            clearSession();
+            return;
+        }
+
+        // Task is in progress or waiting for input — reconnect
+        currentTaskId = taskId;
+        saveSession(taskId);
+        showSection(progressSection);
+        initPhases();
+        updatePhase(task.phase);
+
+        if (task.interrupt_type) {
+            addChatMessage(
+                `Reconnecting to task ${taskId}... Awaiting your input.`,
+                "system"
+            );
+        } else {
+            addChatMessage(
+                `Reconnecting to task ${taskId}...`,
+                "system"
+            );
+        }
+
+        connectWebSocket(taskId);
+    } catch (e) {
+        clearSession();
+    }
+}
+
+// ── History sidebar ──
+
+function addToHistory(taskInfo) {
+    const existing = historyList.querySelector(`[data-task-id="${taskInfo.task_id}"]`);
+    if (existing) {
+        updateHistoryItem(existing, taskInfo);
+        return;
+    }
+
     const li = document.createElement("li");
-    li.textContent = `Task ${taskId}`;
-    li.addEventListener("click", () => {
-        window.open(`/api/tasks/${taskId}`, "_blank");
-    });
+    li.dataset.taskId = taskInfo.task_id;
+    updateHistoryItem(li, taskInfo);
+    li.addEventListener("click", () => onHistoryItemClick(taskInfo.task_id));
     historyList.prepend(li);
 }
 
-// Load existing tasks on page load
+function updateHistoryItem(li, taskInfo) {
+    const statusClass = getStatusClass(taskInfo);
+    const statusIcon = getStatusIcon(taskInfo);
+    li.className = `history-item ${statusClass}`;
+    li.innerHTML = `
+        <span class="history-icon">${statusIcon}</span>
+        <span class="history-label">Task ${taskInfo.task_id}</span>
+        <span class="history-status">${taskInfo.phase || taskInfo.status}</span>
+    `;
+}
+
+function isWaitingForInput(task) {
+    if (task.status === "waiting_for_input") return true;
+    if (task.interrupt_type && task.interrupt_type !== "") return true;
+    const waitingPhases = ["clarifying", "approving_architecture"];
+    if (waitingPhases.includes(task.phase) && task.status !== "running") return true;
+    return false;
+}
+
+function getStatusClass(task) {
+    if (task.status === "done" || task.phase === "done") return "status-done";
+    if (task.status === "error" || task.phase === "error") return "status-error";
+    if (isWaitingForInput(task)) return "status-waiting";
+    if (task.status === "running") return "status-running";
+    return "status-idle";
+}
+
+function getStatusIcon(task) {
+    if (task.status === "done" || task.phase === "done") return "\u2705";
+    if (task.status === "error" || task.phase === "error") return "\u274C";
+    if (isWaitingForInput(task)) return "\u{1F7E1}";
+    if (task.status === "running") return "\u23F3";
+    return "\u26AA";
+}
+
+function onHistoryItemClick(taskId) {
+    if (currentTaskId === taskId && !progressSection.classList.contains("hidden")) {
+        return;
+    }
+    resumeTask(taskId);
+}
+
 async function loadHistory() {
     try {
         const res = await fetch("/api/tasks");
         const tasks = await res.json();
-        tasks.forEach((t) => addToHistory(t.task_id));
+        tasks.forEach((t) => addToHistory(t));
     } catch (e) {
         // ignore
     }
 }
 
-loadHistory();
+async function refreshHistory() {
+    historyList.innerHTML = "";
+    await loadHistory();
+}
+
+// ── Page load: check for interrupted session ──
+
+async function init() {
+    await loadHistory();
+
+    const savedTaskId = getSavedTaskId();
+    if (savedTaskId) {
+        resumeTask(savedTaskId);
+    }
+}
+
+init();

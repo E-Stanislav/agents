@@ -84,7 +84,7 @@ async def _generate_single_file(
             stack_str = ", ".join(state.project_plan.tech_stack.values())
             docs = await _kb.search_docs(stack_str, file_spec.description[:100])
             if docs:
-                rag_context = "\n\n## Relevant Documentation\n"
+                rag_context = "\n\n## Релевантная документация\n"
                 for doc in docs[:3]:
                     rag_context += f"\n{doc.page_content[:1500]}\n"
     except Exception:
@@ -98,31 +98,31 @@ async def _generate_single_file(
     if relevant_feedback:
         fb = relevant_feedback[-1]
         feedback_context = f"""
-## Review Feedback (iteration {state.review_iteration})
-Issues to fix:
+## Обратная связь от ревью (итерация {state.review_iteration})
+Проблемы для исправления:
 {chr(10).join(f"- {issue}" for issue in fb.issues)}
 
-Suggestions:
+Рекомендации:
 {chr(10).join(f"- {s}" for s in fb.suggestions)}
 """
 
     plan_json = state.project_plan.model_dump_json(indent=2) if state.project_plan else "{}"
 
-    user_msg = f"""## Project Plan
+    user_msg = f"""## План проекта
 {plan_json}
 
-## File to Generate
-- **Path**: {file_spec.path}
-- **Language**: {file_spec.language}
-- **Description**: {file_spec.description}
-- **Dependencies**: {', '.join(file_spec.dependencies) or 'none'}
+## Файл для генерации
+- **Путь**: {file_spec.path}
+- **Язык**: {file_spec.language}
+- **Описание**: {file_spec.description}
+- **Зависимости**: {', '.join(file_spec.dependencies) or 'нет'}
 
-## Dependency File Contents
-{dep_context or "No dependencies."}
+## Содержимое файлов-зависимостей
+{dep_context or "Зависимостей нет."}
 {rag_context}
 {feedback_context}
 
-Generate the complete file content for `{file_spec.path}` now."""
+Сгенерируй полное содержимое файла `{file_spec.path}` сейчас."""
 
     response = await llm.ainvoke(
         [

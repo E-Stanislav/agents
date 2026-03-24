@@ -37,7 +37,7 @@ async def analyze_requirements(state: ProjectState) -> dict:
         answers_text = "\n".join(
             f"Q: {a.question_id} -> A: {a.answer}" for a in state.user_answers
         )
-        user_context += f"\n\n## User Answers to Previous Questions\n{answers_text}"
+        user_context += f"\n\n## Ответы пользователя на предыдущие вопросы\n{answers_text}"
 
     response = await llm.ainvoke(
         [

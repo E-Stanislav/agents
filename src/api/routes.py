@@ -35,6 +35,8 @@ class TaskStatus(BaseModel):
     archive_path: str = ""
     errors: list[str] = []
     cost_usd: float = 0.0
+    interrupt_type: str = ""
+    interrupt_data: dict = {}
 
 
 @router.post("/tasks", response_model=TaskResponse)
@@ -107,6 +109,8 @@ async def get_task_status(task_id: str):
         archive_path=task.get("archive_path", ""),
         errors=task.get("errors", []),
         cost_usd=task.get("cost_usd", 0.0),
+        interrupt_type=task.get("interrupt_type", ""),
+        interrupt_data=task.get("interrupt_data", {}),
     )
 
 
@@ -137,6 +141,8 @@ async def list_tasks():
             "task_id": t["task_id"],
             "status": t.get("status", "unknown"),
             "phase": t.get("phase", "unknown"),
+            "interrupt_type": t.get("interrupt_type", ""),
+            "interrupt_data": t.get("interrupt_data", {}),
         }
         for t in _tasks.values()
     ]

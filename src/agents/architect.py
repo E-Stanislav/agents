@@ -51,19 +51,19 @@ async def design_architecture(state: ProjectState) -> dict:
                 stack_values,
             )
             if templates:
-                rag_context = "\n\n## Relevant Templates from Knowledge Base\n"
+                rag_context = "\n\n## Релевантные шаблоны из Базы знаний\n"
                 for doc in templates:
                     rag_context += f"\n### {doc.metadata.get('template_name', 'template')} - {doc.metadata.get('file_path', '')}\n```\n{doc.page_content[:2000]}\n```\n"
     except Exception:
         logger.debug("RAG context retrieval failed, continuing without it", exc_info=True)
 
-    user_msg = f"""## Requirements Analysis
+    user_msg = f"""## Анализ требований
 {state.parsed_requirements}
 
-## User Answers
-{json.dumps([a.model_dump() for a in state.user_answers], ensure_ascii=False, indent=2) if state.user_answers else "No clarification was needed."}
+## Ответы пользователя
+{json.dumps([a.model_dump() for a in state.user_answers], ensure_ascii=False, indent=2) if state.user_answers else "Уточнение не потребовалось."}
 
-{f"## User Feedback on Previous Architecture\n{state.architecture_feedback}" if state.architecture_feedback else ""}
+{f"## Обратная связь пользователя по предыдущей архитектуре\n{state.architecture_feedback}" if state.architecture_feedback else ""}
 {rag_context}"""
 
     response = await llm.ainvoke(

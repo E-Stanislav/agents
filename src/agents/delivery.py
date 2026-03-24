@@ -39,16 +39,16 @@ async def deliver_project(state: ProjectState) -> dict:
     plan_json = state.project_plan.model_dump_json(indent=2) if state.project_plan else "{}"
     file_list = "\n".join(f"- {f.path}" for f in state.generated_files)
 
-    user_msg = f"""## Project Plan
+    user_msg = f"""## План проекта
 {plan_json}
 
-## Generated Files
+## Сгенерированные файлы
 {file_list}
 
-## Test Results
-{state.test_results or "Tests not run"}
+## Результаты тестирования
+{state.test_results or "Тесты не запускались"}
 
-Generate the delivery files now."""
+Сгенерируй файлы доставки сейчас."""
 
     response = await llm.ainvoke(
         [
