@@ -36,8 +36,8 @@ providers:
 
 agents:
   orchestrator:
-    provider: z_ai
-    model: "glm-4.7"
+    provider: openai
+    model: "gpt-4o-mini"
     temperature: 0.0
     max_tokens: 2048
     fallback:
@@ -45,8 +45,8 @@ agents:
       model: "gpt-4o-mini"
 
   analyst:
-    provider: z_ai
-    model: "glm-4.7"
+    provider: anthropic
+    model: "claude-sonnet-4-20250514"
     temperature: 0.3
     max_tokens: 4096
     fallback:
@@ -54,8 +54,8 @@ agents:
       model: "gpt-4o"
 
   architect:
-    provider: z_ai
-    model: "glm-4.7"
+    provider: anthropic
+    model: "claude-sonnet-4-20250514"
     temperature: 0.2
     max_tokens: 8192
     fallback:
@@ -63,8 +63,8 @@ agents:
       model: "claude-sonnet-4-20250514"
 
   coder:
-    provider: z_ai
-    model: "glm-5"
+    provider: anthropic
+    model: "claude-sonnet-4-20250514"
     temperature: 0.1
     max_tokens: 16384
     fallback:
@@ -72,8 +72,8 @@ agents:
       model: "Qwen/Qwen2.5-Coder-32B-Instruct"
 
   reviewer:
-    provider: z_ai
-    model: "glm-4.7"
+    provider: openai
+    model: "gpt-4o"
     temperature: 0.2
     max_tokens: 4096
     fallback:
@@ -81,14 +81,14 @@ agents:
       model: "MiniMax-Text-01"
 
   tester:
-    provider: z_ai
-    model: "glm-4.5"
+    provider: openai
+    model: "gpt-4o"
     temperature: 0.0
     max_tokens: 4096
 
   delivery:
-    provider: z_ai
-    model: "glm-4.7"
+    provider: anthropic
+    model: "claude-sonnet-4-20250514"
     temperature: 0.2
     max_tokens: 8192
 
