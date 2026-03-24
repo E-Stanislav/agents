@@ -14,6 +14,28 @@ from src.observability.tracing import get_langfuse_handler
 
 logger = logging.getLogger(__name__)
 
+_RESTATE_PATTERNS = [
+    "предоставьте описание",
+    "предоставьте требования",
+    "опишите проект",
+    "опишите подробнее",
+    "расскажите подробнее",
+    "предоставьте техническое задание",
+    "предоставьте тз",
+    "уточните требования к проекту",
+    "в формате markdown",
+    "provide a description",
+    "provide requirements",
+    "describe your project",
+    "describe in more detail",
+]
+
+
+def _is_restate_input_question(question_text: str) -> bool:
+    """Return True if the question essentially asks the user to re-provide input."""
+    lowered = question_text.lower()
+    return any(p in lowered for p in _RESTATE_PATTERNS)
+
 
 def _load_prompt() -> str:
     prompt_path = settings.prompts_dir / "analyst.md"
@@ -72,6 +94,7 @@ async def analyze_requirements(state: ProjectState) -> dict:
             options=q.get("options", []),
         )
         for i, q in enumerate(result.get("questions", []))
+        if not _is_restate_input_question(q.get("question", ""))
     ]
 
     needs_clarification = result.get("needs_clarification", False) and len(questions) > 0

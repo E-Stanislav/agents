@@ -64,7 +64,7 @@ agents:
 
   coder:
     provider: z_ai
-    model: "glm-5"
+    model: "glm-4.7"
     temperature: 0.1
     max_tokens: 16384
     fallback:
@@ -82,7 +82,7 @@ agents:
 
   tester:
     provider: z_ai
-    model: "glm-4.5"
+    model: "glm-4.7"
     temperature: 0.0
     max_tokens: 4096
 
