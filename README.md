@@ -107,6 +107,8 @@ curl http://localhost:8000/api/tasks/{task_id}
 curl -O http://localhost:8000/api/tasks/{task_id}/download
 ```
 
+Повторяемый сценарий «создать задачу → пройти WebSocket → скачать архив» без установки зависимостей на хост: **`scripts/e2e_via_api.sh`** (создание задачи через `POST /api/tasks` с `md_content`, как в примере выше; WebSocket — через `docker compose exec` в контейнере `app`). Задание по умолчанию: `tasks/e2e_minimal_task.md`. Переменные: `E2E_BASE_URL` (если не задан — берётся первый адрес из `hostname -I` и `APP_PORT`), `E2E_TASK_FILE`, `E2E_DOWNLOAD_PATH`.
+
 ### WebSocket
 
 Подключение к `ws://localhost:<APP_PORT>/ws/{task_id}` (порт приложения — `APP_PORT` в `.env`).

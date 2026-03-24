@@ -124,6 +124,16 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
     """
     await websocket.accept()
     logger.info("WebSocket connected for task %s", task_id)
+
+    if _active_ws.get(task_id):
+        logger.warning("Task %s: another WebSocket is already active, rejecting", task_id)
+        await websocket.send_json({
+            "type": "error",
+            "message": "Another session is already processing this task. Disconnect it first.",
+        })
+        await websocket.close()
+        return
+
     _active_ws[task_id] = True
 
     try:
@@ -218,10 +228,9 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
                 return
 
             try:
-                stream = app.astream(current_input, config=config)
-                is_resume = True
+                got_interrupt = False
 
-                async for event in stream:
+                async for event in app.astream(current_input, config=config):
                     if cancel_event.is_set():
                         await _finish_cancelled()
                         return
@@ -231,7 +240,6 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
                             interrupt_payload = _extract_interrupt_value(node_output)
                             interrupt_type = interrupt_payload.get("type", "unknown")
 
-                            # Persist interrupt state so reconnection works
                             update_task(
                                 task_id,
                                 status="waiting_for_input",
@@ -245,7 +253,6 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
                                 "data": interrupt_payload,
                             })
 
-                            # Wait for either user response or cancellation
                             receive_task = asyncio.ensure_future(websocket.receive_text())
                             cancel_wait = asyncio.ensure_future(cancel_event.wait())
 
@@ -265,7 +272,6 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
                             response = json.loads(response_raw)
                             resume_data = response.get("data", response)
 
-                            # Clear interrupt state on successful resume
                             update_task(
                                 task_id,
                                 status="running",
@@ -274,6 +280,7 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
                             )
 
                             current_input = Command(resume=resume_data)
+                            got_interrupt = True
                             continue
 
                         phase = "unknown"
@@ -325,7 +332,8 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
                                 )
                                 return
 
-                break
+                if not got_interrupt:
+                    break
 
             except WebSocketDisconnect:
                 logger.info("WebSocket disconnected for task %s (interrupt state preserved)", task_id)

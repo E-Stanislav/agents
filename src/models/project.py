@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DependencyNode(BaseModel):
@@ -48,3 +48,28 @@ class ProjectPlan(BaseModel):
     setup_commands: list[str] = Field(default_factory=list)
     test_commands: list[str] = Field(default_factory=list)
     lint_commands: list[str] = Field(default_factory=list)
+
+    @field_validator("tech_stack", mode="before")
+    @classmethod
+    def _normalize_tech_stack(cls, v: Any) -> dict[str, str]:
+        """LLM часто отдаёт списки (например key_libraries: []); в модели — только строки."""
+        if not isinstance(v, dict):
+            return {}
+        out: dict[str, str] = {}
+        for key, val in v.items():
+            k = str(key)
+            if val is None:
+                out[k] = ""
+            elif isinstance(val, list):
+                out[k] = ", ".join(str(x) for x in val)
+            else:
+                out[k] = str(val)
+        return out
+
+    @field_validator("docker_base_image", mode="before")
+    @classmethod
+    def _docker_image_default(cls, v: Any) -> str:
+        """Промпт допускает null, если Docker не нужен — подставляем образ для песочницы."""
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "node:20-slim"
+        return str(v)

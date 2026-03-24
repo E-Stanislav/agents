@@ -12,6 +12,7 @@ COPY requirements.txt .
 RUN uv pip install --system --no-cache -r requirements.txt
 
 COPY src/ src/
+COPY scripts/ scripts/
 COPY llm_config.yaml .
 
 RUN mkdir -p /app/tasks /app/output /app/templates

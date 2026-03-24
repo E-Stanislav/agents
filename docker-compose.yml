@@ -11,10 +11,11 @@ services:
       - .env
     volumes:
       - ./llm_config.yaml:/app/llm_config.yaml:ro
+      - ./scripts:/app/scripts:ro
       - ./tasks:/app/tasks
       - ./output:/app/output
       - ./templates:/app/templates:ro
-      - ./src/prompts:/app/src/prompts:ro
+      - ./src:/app/src:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -125,7 +125,7 @@ async def design_architecture(state: ProjectState) -> dict:
         files=files,
         dependency_graph=dep_graph,
         package_dependencies=result.get("package_dependencies", {}),
-        docker_base_image=result.get("docker_base_image", "node:20-slim"),
+        docker_base_image=result.get("docker_base_image") or "node:20-slim",
         setup_commands=result.get("setup_commands", []),
         test_commands=result.get("test_commands", []),
         lint_commands=result.get("lint_commands", []),
