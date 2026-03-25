@@ -20,8 +20,52 @@ _tasks: dict[str, dict] = {}
 # Per-task cancellation events: set() means "please cancel"
 _cancel_events: dict[str, asyncio.Event] = {}
 
-# Tracks whether a WebSocket handler is actively processing each task
-_active_ws: dict[str, bool] = {}
+# Background graph runners keyed by task_id
+_task_runners: dict[str, asyncio.Task] = {}
+
+# Event queues: graph runner pushes events, WS consumers read them.
+# Multiple WS can subscribe; each gets its own view via TaskBus.
+_task_buses: dict[str, "TaskBus"] = {}
+
+# Queue for user responses (resume data) — graph runner awaits this.
+_resume_queues: dict[str, asyncio.Queue] = {}
+
+
+class TaskBus:
+    """Fan-out event bus: one producer (graph runner), many consumers (WS)."""
+
+    def __init__(self) -> None:
+        self._subscribers: list[asyncio.Queue] = []
+
+    def subscribe(self) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue()
+        self._subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue) -> None:
+        try:
+            self._subscribers.remove(q)
+        except ValueError:
+            pass
+
+    async def publish(self, event: dict) -> None:
+        for q in self._subscribers:
+            try:
+                q.put_nowait(event)
+            except asyncio.QueueFull:
+                pass
+
+
+def get_task_bus(task_id: str) -> TaskBus:
+    if task_id not in _task_buses:
+        _task_buses[task_id] = TaskBus()
+    return _task_buses[task_id]
+
+
+def get_resume_queue(task_id: str) -> asyncio.Queue:
+    if task_id not in _resume_queues:
+        _resume_queues[task_id] = asyncio.Queue()
+    return _resume_queues[task_id]
 
 
 class TaskCreate(BaseModel):
@@ -176,14 +220,15 @@ async def cancel_task(task_id: str):
     _cancel_events[task_id].set()
     logger.info("Cancel requested for task %s", task_id)
 
-    if not _active_ws.get(task_id):
+    runner = _task_runners.get(task_id)
+    if not runner or runner.done():
         _tasks[task_id].update(
             status="cancelled",
             phase="cancelled",
             interrupt_type="",
             interrupt_data={},
         )
-        logger.info("Task %s cancelled directly (no active WS handler)", task_id)
+        logger.info("Task %s cancelled directly (no active runner)", task_id)
         return {"task_id": task_id, "status": "cancelled"}
 
     return {"task_id": task_id, "status": "cancel_requested"}
@@ -197,6 +242,6 @@ def get_cancel_event(task_id: str) -> asyncio.Event:
 
 
 def update_task(task_id: str, **kwargs) -> None:
-    """Update task state (called from WebSocket handler)."""
+    """Update task state (called from graph runner)."""
     if task_id in _tasks:
         _tasks[task_id].update(kwargs)
